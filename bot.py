@@ -81,15 +81,13 @@ def report():
         print("HATA: Bot loop henüz hazır değil!")
     return jsonify({"status": "queued"}), 200
 
-# === KRİTİK DEĞİŞİKLİK BURADA ===
-# Gunicorn bu dosyayı import ettiğinde Discord botunu arka planda başlat
-def start_bot():
-    bot.run(TOKEN)
+def run_flask():
+    # Render'ın atadığı portu (PORT) kullan, yoksa 8080 kullan
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
-if os.environ.get("RENDER") or __name__ != "__main__":
-    # Render ortamındaysa veya import ediliyorsa botu arka planda başlat
-    threading.Thread(target=start_bot, daemon=True).start()
-else:
-    # Lokal testte (python bot.py) Flask'ı arka plana al, botu ana thread'de başlat
-    threading.Thread(target=lambda: app.run(host="127.0.0.1", port=8080, use_reloader=False), daemon=True).start()
+if __name__ == "__main__":
+    # Flask'ı arka plan thread'inde başlat
+    threading.Thread(target=run_flask, daemon=True).start()
+    # Discord botunu ANA THREAD'de başlat (Sinyalleri alabilmesi için)
     bot.run(TOKEN)
